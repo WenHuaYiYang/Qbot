@@ -1,0 +1,12 @@
+{
+    "initialized": false,
+    "assistant": {
+        "base_url": "",
+        "api_key": "",
+        "model": ""
+    },
+    "websockets": {
+        "host": "",
+        "port": ""
+    }
+}
