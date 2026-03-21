@@ -48,7 +48,7 @@ git clone https://github.com/WHEN-HUA-YIYANG/Qbot.git
 cd Qbot
 uv venv  # 创建虚拟环境（默认 .venv）
 source .venv/bin/activate  # Linux/macOS 激活；Windows 用 .venv\Scripts\activate
-uv uv sync  # 安装依赖
+uv sync  # 安装依赖
 ```
 ### 4. 运行项目
 
