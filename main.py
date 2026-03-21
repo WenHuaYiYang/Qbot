@@ -33,7 +33,7 @@ async def send_video_and_delete(websocket, user_id, video_path):
     await websocket.send(json.dumps(payload))
 
 async def handler(websocket):
-    print("✅ NapCat 已连接")
+    print("✅ NapCat 已连接！")
     async for response in websocket:
         data = json.loads(response)
         print("收到消息:", data)
