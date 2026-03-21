@@ -47,7 +47,7 @@ pip install uv
 cd Qbot https://github.com/WHEN-HUA-YIYANG/Qbot.git
 uv venv  # 创建虚拟环境（默认 .venv）
 source .venv/bin/activate  # Linux/macOS 激活；Windows 用 .venv\Scripts\activate
-uv sync
+uv 
 ```
 ### 4. 运行项目
 
