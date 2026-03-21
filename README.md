@@ -44,7 +44,7 @@ pip install uv
 克隆本项目并进入目录，创建虚拟环境并安装依赖：
 
 ```bash
-git clone 
+git clone https://github.com/WHEN-HUA-YIYANG/Qbot.git
 cd Qbot
 uv venv  # 创建虚拟环境（默认 .venv）
 source .venv/bin/activate  # Linux/macOS 激活；Windows 用 .venv\Scripts\activate
