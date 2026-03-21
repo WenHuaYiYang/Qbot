@@ -1,0 +1,9 @@
+[project]
+name = "qbot"
+version = "0.1.0"
+description = "一个QQ聊天机器人，可接入大模型"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=2.29.0",
+    "websockets>=16.0",
+]
