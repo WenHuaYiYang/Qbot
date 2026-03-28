@@ -5,6 +5,8 @@ description = "一个QQ聊天机器人，可接入大模型"
 requires-python = ">=3.11"
 dependencies = [
     "openai>=2.29.0",
+    "requests>=2.33.0",
+    "schedule>=1.2.2",
     "websockets>=16.0",
     "yt-dlp>=2026.3.17",
 ]

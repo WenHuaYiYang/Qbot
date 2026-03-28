@@ -2,16 +2,18 @@ import asyncio
 import os
 import random
 import subprocess
-
+import datetime
 import websockets
 import json
-from chatbot import send_message, test_connection, update_client
+from functions.chatbot import send_message, test_connection, update_client
+from functions.hitokoto import get_hitokoto
 
 with open("config/config.json", "r") as f:
     config = json.load(f)
 
 # 用于暂存待删除文件的映射
 pending_files = {}  # echo -> file_path
+current_websocket = None
 
 async def send_video_and_delete(websocket, user_id, video_path):
     # 生成唯一标识
@@ -32,7 +34,10 @@ async def send_video_and_delete(websocket, user_id, video_path):
     }
     await websocket.send(json.dumps(payload))
 
+
 async def handler(websocket):
+    global current_websocket
+    current_websocket = websocket
     print("✅ NapCat 已连接！")
     async for response in websocket:
         data = json.loads(response)
@@ -169,6 +174,7 @@ async def process_bilibili_card(data, websocket):
             print(f"视频发送请求已提交: {file_path}")
             break  # 找到第一个B站卡片后退出
 
+
 def extract_bilibili_url_from_json(data_str):
     """从json消息段中提取B站视频链接"""
     data = json.loads(data_str)
@@ -179,7 +185,32 @@ def extract_bilibili_url_from_json(data_str):
     return qqdocurl
 
 
+async def scheduled_signature():
+    target_time = "15:30"
+    last_run_date = None
+    while True:
+        now = datetime.datetime.now()
+        current_time = now.strftime("%H:%M")
+        today = now.date()
+        if current_time == target_time and last_run_date != today and current_websocket:
+            data = get_hitokoto()
+            hitokoto = data.get("hitokoto", None)
+            from_where = data.get("from_where", "无题")
+            from_who= data.get("from_who", "无名氏")
+            if hitokoto and from_where and from_who:
+                payload = {
+                    "action": "set_diy_online_status",
+                    "params": {"status": f"{hitokoto} ——《{from_where}》（{from_who}）"},
+                    "echo": "signature_auto"
+                }
+                await current_websocket.send(json.dumps(payload))
+                print(f"[{now}] 已发送签名修改请求")
+                last_run_date = today
+        await asyncio.sleep(60)
+
+
 async def main():
+    asyncio.create_task(scheduled_signature())
     async with websockets.serve(handler, config["websockets"]["host"], config["websockets"]["port"]):
         print("WebSocket 服务器已启动，等待 NapCat 连接...")
         await asyncio.Future()  # 永久运行
