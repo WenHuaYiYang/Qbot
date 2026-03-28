@@ -7,6 +7,30 @@ import websockets
 import json
 from functions.chatbot import send_message, test_connection, update_client
 from functions.hitokoto import get_hitokoto
+from functions.napcat_scheduler import run_napcat_schedule
+import logging
+import colorlog
+from rich import print
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Prompt, Confirm
+
+handler = colorlog.StreamHandler()
+handler.setFormatter(colorlog.ColoredFormatter(
+    '%(log_color)s%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    log_colors={
+        'DEBUG': 'cyan',
+        'INFO': 'blue,bold',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
+        'CRITICAL': 'red,bg_white',
+    }
+))
+root_logger = logging.getLogger()
+if not root_logger.handlers:
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.INFO)
 
 with open("config/config.json", "r") as f:
     config = json.load(f)
@@ -38,10 +62,14 @@ async def send_video_and_delete(websocket, user_id, video_path):
 async def handler(websocket):
     global current_websocket
     current_websocket = websocket
-    print("✅ NapCat 已连接！")
+    logging.info("✅ NapCat 已连接！")
     async for response in websocket:
         data = json.loads(response)
-        print("收到消息:", data)
+        if data.get("sub_type") == "input_status":
+            logging.info(f"[用户]:{data.get('user_id')} 正在输入中...")
+
+        if data.get("meta_event_type") == "heartbeat":
+            logging.info("[当前状态]:"+("在线 "+f"[登录QQ]:{data.get('self_id')}"if data["status"]["online"] else "离线"))
 
         # 如果收到的是事件（如用户消息）
         if data.get("post_type") == "message":
@@ -57,11 +85,11 @@ async def handler(websocket):
             if data.get("status") == "ok":
                 try:
                     os.remove(file_path[0])
-                    print(f"删除成功: {file_path[0]}")
+                    logging.info(f"删除成功: {file_path[0]}")
                 except Exception as e:
-                    print(f"删除失败: {e}")
+                    logging.error(f"删除失败: {e}")
             else:
-                print(f"发送失败，未删除文件: {file_path}")
+                logging.warning(f"发送失败，未删除文件: {file_path}")
 
 
 async def process_friend_add_request(data, websocket):
@@ -89,7 +117,7 @@ async def process_friend_add_request(data, websocket):
         }
 
     await websocket.send(json.dumps(response))
-    print(f"已处理好友请求，用户 {user_id}，验证消息：{comment}")
+    logging.info(f"已处理好友请求，用户 {user_id}，验证消息：{comment}")
 
 
 async def process_message(data, websocket):
@@ -97,8 +125,9 @@ async def process_message(data, websocket):
     for message in messages:
         if message["type"] == "text":
             text = data["sender"]["nickname"] + "：" + message["data"]["text"]
+            logging.info("[用户]"+text)
             replies = send_message(text, data["sender"]["user_id"])
-            print(replies)
+            logging.info("[回复]" + " ".join(replies))
             for rep in replies:
                 # 发送回复（API 请求格式）
                 reply = {
@@ -152,7 +181,7 @@ async def process_bilibili_card(data, websocket):
     处理消息中的B站视频卡片（JSON类型），提取信息并回复
     """
     message_segments = data.get("message")
-    print("message_segments:"+str(message_segments))
+    logging.info("[message_segments]:"+str(message_segments))
     for seg in message_segments:
         if seg.get("type") == "json":
             json_str = seg.get("data", {}).get("data", "")
@@ -171,7 +200,7 @@ async def process_bilibili_card(data, websocket):
 
             file_path = download_bilibili_video(bili_url)
             await send_video_and_delete(websocket, data.get("user_id"), file_path)
-            print(f"视频发送请求已提交: {file_path}")
+            logging.info(f"视频发送请求已提交: {file_path}")
             break  # 找到第一个B站卡片后退出
 
 
@@ -181,12 +210,12 @@ def extract_bilibili_url_from_json(data_str):
     meta = data.get("meta")
     detail = meta.get("detail_1")
     qqdocurl = detail.get("qqdocurl", "")
-    print("qqdocurl:"+str(qqdocurl))
+    logging.info("[qqdocurl]:"+str(qqdocurl))
     return qqdocurl
 
 
 async def scheduled_signature():
-    target_time = "15:30"
+    target_time = "12:00"
     last_run_date = None
     while True:
         now = datetime.datetime.now()
@@ -195,33 +224,37 @@ async def scheduled_signature():
         if current_time == target_time and last_run_date != today and current_websocket:
             data = get_hitokoto()
             hitokoto = data.get("hitokoto", None)
-            from_where = data.get("from_where", "无题")
-            from_who= data.get("from_who", "无名氏")
+            from_where = data.get("from", "无题")
+            from_who = data.get("from_who", "无名氏")
             if hitokoto and from_where and from_who:
                 payload = {
-                    "action": "set_diy_online_status",
-                    "params": {"status": f"{hitokoto} ——《{from_where}》（{from_who}）"},
-                    "echo": "signature_auto"
+                    "action": "set_self_longnick",
+                    "params": {
+                        "longNick": f"{hitokoto} ——《{from_where}》（{from_who}）"
+                    }
                 }
                 await current_websocket.send(json.dumps(payload))
-                print(f"[{now}] 已发送签名修改请求")
-                last_run_date = today
+                logging.info(f"已发送签名修改请求")
         await asyncio.sleep(60)
 
 
 async def main():
     asyncio.create_task(scheduled_signature())
+    if config.get("napcat_scheduler"):
+        asyncio.create_task(run_napcat_schedule())
     async with websockets.serve(handler, config["websockets"]["host"], config["websockets"]["port"]):
-        print("WebSocket 服务器已启动，等待 NapCat 连接...")
+        logging.info("WebSocket 服务器已启动，等待 NapCat 连接...")
         await asyncio.Future()  # 永久运行
 
 
 if __name__ == "__main__":
+    console = Console()
+
     if not config.get("initialized"):
-        print("----模型初始化----")
-        base_url = input("请输入base_url:")
-        api_key = input("请输入api_key:")
-        model = input("请输入model:")
+        console.print(Panel.fit("模型初始化", style="bold cyan"))
+        base_url = Prompt.ask("请输入 [bold green]base_url[/bold green]")
+        api_key = Prompt.ask("请输入 [bold green]api_key[/bold green]")
+        model = Prompt.ask("请输入 [bold green]model[/bold green]")
         config["assistant"] = {
             "base_url": base_url,
             "api_key": api_key,
@@ -231,16 +264,34 @@ if __name__ == "__main__":
             json.dump(config, f, ensure_ascii=False, indent=4)
         update_client()
         test_connection()
-        print("---websockets初始化---")
-        host = input("请输入host:")
-        port = input("请输入port:")
+
+        console.print(Panel.fit("WebSocket 初始化", style="bold cyan"))
+        host = Prompt.ask("请输入 [bold green]host[/bold green]")
+        port = Prompt.ask("请输入 [bold green]port[/bold green]")
         config["websockets"] = {
             "host": host,
             "port": port
         }
+
+        console.print(Panel.fit("NapCat 定时调度器", style="bold cyan"))
+        scheduler_enabled = Confirm.ask("是否开启 NapCat 定时调度器？")
+        if scheduler_enabled:
+            start_time = Prompt.ask("请输入开始时间(HH:MM):")
+            stop_time = Prompt.ask("请输入关闭时间(HH:MM):")
+            with open("functions/schedule.json", "w", encoding="utf-8") as f:
+                setups = {
+                    "napcat": {
+                        "start_time": start_time,
+                        "stop_time": stop_time
+                    }
+                }
+                json.dump(setups, f, ensure_ascii=False, indent=4)
+        config["napcat_scheduler"] = scheduler_enabled
+
         config["initialized"] = True
         with open("config/config.json", "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=4)
+
         asyncio.run(main())
     else:
         asyncio.run(main())

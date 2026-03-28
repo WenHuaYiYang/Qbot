@@ -1,23 +1,14 @@
+import json
+import os
 import subprocess
 import logging
+import asyncio
 import schedule
-import time
-import sys
 from datetime import datetime
 
-# 配置日志
-LOG_FILE = "/var/log/napcat_scheduler.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+logger = logging.getLogger(__name__)
 
 
-# ---------- 根据你的 NapCat 部署方式修改以下函数 ----------
 def start_napcat():
     """启动 NapCat（Docker 容器方式）"""
     try:
@@ -61,53 +52,31 @@ def stop_napcat():
     except Exception as e:
         logging.error(f"停止过程发生异常: {e}")
 
-
-# ---------- 直接运行二进制方式的函数示例（备用） ----------
-def start_napcat_binary():
-    """直接运行 NapCat 二进制（需替换实际路径）"""
-    try:
-        # 检查进程是否已存在
-        result = subprocess.run(["pgrep", "-f", "napcat"], capture_output=True)
-        if result.returncode == 0:
-            logging.info("NapCat 进程已在运行")
-            return
-
-        # 启动进程（后台运行）
-        logging.info("正在启动 NapCat 进程...")
-        subprocess.Popen(
-            ["/home/user/napcat/napcat"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True  # 脱离终端
-        )
-        logging.info("NapCat 启动成功")
-    except Exception as e:
-        logging.error(f"启动失败: {e}")
-
-
-def stop_napcat_binary():
-    """终止 NapCat 进程"""
-    try:
-        # 杀死进程
-        subprocess.run(["pkill", "-f", "napcat"], check=True)
-        logging.info("NapCat 进程已终止")
-    except subprocess.CalledProcessError:
-        logging.info("未找到 NapCat 进程，无需停止")
-    except Exception as e:
-        logging.error(f"停止失败: {e}")
-
-
-# ---------- 调度配置 ----------
-# 设置每天启动和停止的时间（24小时制）
-START_TIME = "08:00"  # 早上8点登录
-STOP_TIME = "23:00"  # 晚上11点下线
+START_TIME = "08:00"
+STOP_TIME = "23:00"
+if not __name__ == "__main__":
+    if not os.path.exists("functions/schedule.json"):
+        os.makedirs("functions/schedule.json")
+        with open("functions/schedule.json", "w", encoding="utf-8") as f:
+            data = {
+                    "napcat": {
+                        "start_time": "08:00",
+                        "stop_time": "23:00"
+                    }
+                }
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    else:
+        with open("functions/schedule.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+            START_TIME = data.get("napcat").get("start_time")
+            STOP_TIME = data.get("napcat").get("stop_time")
 
 # 绑定任务
 schedule.every().day.at(START_TIME).do(start_napcat)
 schedule.every().day.at(STOP_TIME).do(stop_napcat)
 
 
-# 可选：启动时立即执行一次检查（例如确保当前状态与时间匹配）
+#启动时立即执行一次检查
 def initial_check():
     current_hour = datetime.now().hour
     if START_TIME.split(":")[0] <= str(current_hour) < STOP_TIME.split(":")[0]:
@@ -118,7 +87,7 @@ def initial_check():
         stop_napcat()
 
 
-if __name__ == "__main__":
+async def run_napcat_schedule():
     logging.info("NapCat 定时调度器已启动")
     initial_check()
 
@@ -126,10 +95,18 @@ if __name__ == "__main__":
     while True:
         try:
             schedule.run_pending()
-            time.sleep(60)  # 每分钟检查一次
+            await asyncio.sleep(60)  # 每分钟检查一次
         except KeyboardInterrupt:
             logging.info("收到中断信号，退出调度器")
             break
         except Exception as e:
             logging.error(f"调度循环异常: {e}")
-            time.sleep(60)
+            await asyncio.sleep(60)
+
+
+if __name__ == "__main__":
+    with open("schedule.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+        START_TIME = data["START_TIME"]
+        STOP_TIME = data["STOP_TIME"]
+    run_napcat_schedule()

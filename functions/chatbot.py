@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 from openai import OpenAI
@@ -40,7 +41,7 @@ def send_message(content, user_info):
     conversation_history.extend([
         {"role": "user", "content": content}
     ])
-    print(conversation_history)
+    logging.info(conversation_history)
     response = client.chat.completions.create(
         model=config["assistant"]["model"],
         messages=conversation_history,
@@ -60,6 +61,6 @@ def test_connection():
             messages=[{"role": "user", "content": "ping"}], # type: ignore
             max_tokens=1,
         )
-        print("✅ 连接成功，返回内容：", response.choices[0].message.content)
+        logging.info("✅ 连接成功，返回内容："+response.choices[0].message.content)
     except Exception as e:
         raise ("连接失败：", e)

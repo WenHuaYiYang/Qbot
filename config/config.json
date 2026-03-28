@@ -8,5 +8,6 @@
     "websockets": {
         "host": "",
         "port": ""
-    }
+    },
+    "napcat_scheduler": false
 }

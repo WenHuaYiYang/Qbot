@@ -4,8 +4,11 @@ version = "0.1.0"
 description = "一个QQ聊天机器人，可接入大模型"
 requires-python = ">=3.11"
 dependencies = [
+    "asyncio>=4.0.0",
+    "colorlog>=6.10.1",
     "openai>=2.29.0",
     "requests>=2.33.0",
+    "rich>=14.3.3",
     "schedule>=1.2.2",
     "websockets>=16.0",
     "yt-dlp>=2026.3.17",
