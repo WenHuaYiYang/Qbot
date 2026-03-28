@@ -30,6 +30,13 @@ NapCat 是 QQ 协议的实现，负责与腾讯服务器通信。请根据你的
 - 打开 NapCat WebUI
 - 进入 **网络配置** → 确保 **WebSocket 服务端** 已启用，并设置端口
 
+> [!WARNING]
+> **Docker 网络隔离注意事项**
+> 
+> 容器内的 `127.0.0.1` 指向容器自身，而非宿主机。NapCat 无法通过 `127.0.0.1` 访问宿主机的服务。
+> 
+> 请务必使用 `host.docker.internal` 或宿主机内网 IP 配置 WebSocket 连接地址。
+
 ### 3. 安装 uv 并创建虚拟环境
 
 本项目使用 [uv](https://docs.astral.sh/uv/) 进行依赖管理。确保你已安装 Python 3.11+，然后安装 uv：
